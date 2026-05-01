@@ -518,25 +518,43 @@ class _JudgeEventRunningScreenState extends State<JudgeEventRunningScreen> {
       color: Colors.black87,
       child: Column(
         children: [
-          // Camera feed placeholder
+          // Camera feed - demo image
           Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.videocam, size: 64, color: Colors.grey[600]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Flux Caméra',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[500]),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  'assets/resultat_detection.jpg',
+                  fit: BoxFit.contain,
+                ),
+                // Overlay label
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam, size: 16, color: Colors.red[400]),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'CAMéra LIVE',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Connectez les caméras pour voir le parcours',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
