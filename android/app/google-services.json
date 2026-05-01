@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "464890461070",
+    "project_id": "equitation-a2bee",
+    "storage_bucket": "equitation-a2bee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464890461070:android:5c8d4ecb2ed0b371cd02df",
+        "android_client_info": {
+          "package_name": "com.example.equitation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvVFYw0xLrzYtBu_Hd-PqNGcZW13Cvt8M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
