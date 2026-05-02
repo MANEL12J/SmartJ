@@ -29,22 +29,14 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadCompetitions();
   }
 
-  Future<void> _loadCompetitions() async {
-    try {
-      final competitions = await _firebaseService.getCompetitions();
-      setState(() {
-        _competitions = competitions;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showError('Erreur lors du chargement des compétitions: $e');
-    }
+  Stream<List<Competition>> _getCompetitionsStream() {
+    return _firebaseService.getCompetitionsStream();
+  }
+
+  Stream<List<Event>> _getEventsStream() {
+    return _firebaseService.getEventsStream();
   }
 
   Future<void> _selectCompetition(Competition competition) async {
@@ -112,7 +104,7 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
             ),
             child: Row(
               children: [
-                Icon(Icons.gavel, size: 32, color: Colors.white),
+                const Icon(Icons.gavel, size: 32, color: Colors.white),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -181,8 +173,8 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
           color:
               isSelected ? Colors.white.withOpacity(0.15) : Colors.transparent,
           border: isSelected
-              ? Border(left: BorderSide(color: Colors.white, width: 4))
-              : Border(left: BorderSide(color: Colors.transparent, width: 4)),
+              ? const Border(left: BorderSide(color: Colors.white, width: 4))
+              : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
         ),
         child: Row(
           children: [
@@ -210,14 +202,14 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            Icon(Icons.logout, size: 20, color: Colors.red[300]),
+            Icon(Icons.logout, size: 20, color: Colors.red),
             const SizedBox(width: 12),
             Text(
               'Déconnexion',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.red[300],
+                color: Colors.red,
               ),
             ),
           ],
@@ -242,148 +234,317 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
   Widget _buildCompetitionsContent() {
     return Container(
       color: Colors.grey[100],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.emoji_events, size: 28, color: Colors.green[700]),
-                const SizedBox(width: 12),
-                Text(
-                  'Compétitions',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green[700],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadCompetitions,
-                  color: Colors.green[700],
-                ),
-              ],
-            ),
-          ),
+      child: StreamBuilder<List<Competition>>(
+        stream: _getCompetitionsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _competitions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.emoji_events_outlined,
-                                size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text('Aucune compétition trouvée',
-                                style: TextStyle(color: Colors.grey[600])),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadCompetitions,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _competitions.length,
-                          itemBuilder: (context, index) {
-                            return _buildCompetitionCard(_competitions[index]);
-                          },
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
+                  const SizedBox(height: 16),
+                  Text('Erreur de chargement',
+                      style: TextStyle(color: Colors.red[600])),
+                ],
+              ),
+            );
+          }
+
+          final competitions = snapshot.data ?? [];
+
+          if (competitions.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.emoji_events_outlined,
+                      size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text('Aucune compétition trouvée',
+                      style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              // En-tête du tableau
+              Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green[700],
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      // Colonne Nom
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Nom',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ),
-          ),
-        ],
+                      // Colonne Date
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Date',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Club
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Club',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Région
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Région',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Règlement
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: const Text(
+                            'Règlement',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Liste des compétitions
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: competitions.length,
+                  itemBuilder: (context, index) {
+                    return _buildCompetitionListCard(competitions[index]);
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildCompetitionCard(Competition competition) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: () => _selectCompetition(competition),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildCompetitionListCard(Competition competition) {
+    return InkWell(
+      onTap: () => _selectCompetition(competition),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      competition.nom,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+              // Colonne Nom
+              Expanded(
+                flex: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
                   ),
-                  Icon(Icons.arrow_forward_ios,
-                      size: 16, color: Colors.grey[600]),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(competition.region,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                  const SizedBox(width: 16),
-                  Icon(Icons.home, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(competition.club,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${competition.date.day}/${competition.date.month}/${competition.date.year}',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(width: 16),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: competition.reglement == 'FEI'
-                          ? Colors.orange[100]
-                          : Colors.blue[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      competition.reglement,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: competition.reglement == 'FEI'
-                            ? Colors.orange[700]
-                            : Colors.blue[700],
-                        fontWeight: FontWeight.bold,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        competition.nom,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+              
+              // Colonne Date
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${competition.date.day}/${competition.date.month}/${competition.date.year}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Colonne Club
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        competition.club,
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Colonne Région
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        competition.region,
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Colonne Règlement
+              Expanded(
+                flex: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: competition.reglement == 'FEI'
+                              ? Colors.orange[100]
+                              : Colors.blue[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          competition.reglement,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: competition.reglement == 'FEI'
+                                ? Colors.orange[700]
+                                : Colors.blue[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -396,327 +557,602 @@ class _JudgeDashboardState extends State<JudgeDashboard> {
     final competition = _selectedCompetition!;
     return Container(
       color: Colors.grey[100],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+      child: StreamBuilder<List<Event>>(
+        stream: _getEventsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
+                  const SizedBox(height: 16),
+                  Text('Erreur de chargement',
+                      style: TextStyle(color: Colors.red[600])),
+                ],
+              ),
+            );
+          }
+
+          final allEvents = snapshot.data ?? [];
+          final competitionEvents = allEvents
+              .where((event) => event.competitionId == competition.id)
+              .toList();
+          
+          // Sort by date and time
+          competitionEvents.sort((a, b) {
+            int dateCompare = a.date.compareTo(b.date);
+            if (dateCompare != 0) return dateCompare;
+            return a.heure.compareTo(b.heure);
+          });
+
+          return Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => _onMenuSelected(0),
-                  color: Colors.green[700],
-                ),
-                const SizedBox(width: 8),
-                Icon(Icons.sports_gymnastics,
-                    size: 28, color: Colors.green[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        competition.nom,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => _onMenuSelected(0),
+                      color: Colors.green[700],
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.sports_gymnastics,
+                        size: 28, color: Colors.green[700]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            competition.nom,
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                          Text(
+                            '${competition.region} — ${competition.club}',
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: competition.reglement == 'FEI'
+                            ? Colors.orange[100]
+                            : Colors.blue[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        competition.reglement,
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 14,
+                          color: competition.reglement == 'FEI'
+                              ? Colors.orange[700]
+                              : Colors.blue[700],
                           fontWeight: FontWeight.bold,
-                          color: Colors.green[700],
                         ),
                       ),
-                      Text(
-                        '${competition.region} — ${competition.club}',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+
+              // En-tête du tableau des épreuves
+              Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red[700],
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      // Colonne Nom
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Nom',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Date
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Date',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Heure
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Heure',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Hauteur
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Hauteur',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Carrière
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Carrière',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Barème
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          ),
+                          child: const Text(
+                            'Barème',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Colonne Actions
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: const Text(
+                            'Actions',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: competition.reglement == 'FEI'
-                        ? Colors.orange[100]
-                        : Colors.blue[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    competition.reglement,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: competition.reglement == 'FEI'
-                          ? Colors.orange[700]
-                          : Colors.blue[700],
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
 
-          // Events list
-          Expanded(
-            child: _selectedCompetitionEvents.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.sports_gymnastics_outlined,
-                            size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('Aucune épreuve dans cette compétition',
-                            style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _selectedCompetitionEvents.length,
-                    itemBuilder: (context, index) {
-                      return _buildEventCard(_selectedCompetitionEvents[index]);
-                    },
-                  ),
-          ),
-        ],
+              // Liste des épreuves
+              Expanded(
+                child: competitionEvents.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.sports_gymnastics_outlined,
+                                size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text('Aucune épreuve dans cette compétition',
+                                style: TextStyle(color: Colors.grey[600])),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: competitionEvents.length,
+                        itemBuilder: (context, index) {
+                          return _buildEventListCard(competitionEvents[index]);
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildEventCard(Event event) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildEventListCard(Event event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    event.nom,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+            // Colonne Nom
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    event.bareme,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.red[700],
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text('${event.date.day}/${event.date.month}/${event.date.year}',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                const SizedBox(width: 16),
-                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(event.heure,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.height, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text('${event.hauteur}m',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                const SizedBox(width: 16),
-                Icon(Icons.stadium, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(event.carriere,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                if (event.avecBarage) ...[
-                  const SizedBox(width: 16),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.amber[100],
-                      borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.nom,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Text('Barage',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.amber[800],
-                            fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ],
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            // Badges: tracé + engagés
-            FutureBuilder<bool>(
-              future: _firebaseService.hasEventTrace(event.id ?? ''),
-              builder: (context, traceSnapshot) {
-                return FutureBuilder<bool>(
-                  future: _firebaseService.hasEngagesList(event.id ?? ''),
-                  builder: (context, engagesSnapshot) {
-                    final hasTrace = traceSnapshot.data ?? false;
-                    final hasEngages = engagesSnapshot.data ?? false;
+            
+            // Colonne Date
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${event.date.day}/${event.date.month}/${event.date.year}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Heure
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.heure,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Hauteur
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${event.hauteur}m',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Carrière
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.carriere,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Barème
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        event.bareme,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.red[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Actions
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Badges: tracé + engagés
+                    FutureBuilder<bool>(
+                      future: _firebaseService.hasEventTrace(event.id ?? ''),
+                      builder: (context, traceSnapshot) {
+                        return FutureBuilder<bool>(
+                          future: _firebaseService.hasEngagesList(event.id ?? ''),
+                          builder: (context, engagesSnapshot) {
+                            final hasTrace = traceSnapshot.data ?? false;
+                            final hasEngages = engagesSnapshot.data ?? false;
 
-                    if (!hasTrace && !hasEngages) {
-                      return const SizedBox.shrink();
-                    }
+                            if (!hasTrace && !hasEngages) {
+                              return const SizedBox.shrink();
+                            }
 
-                    return Row(
-                      children: [
-                        if (hasTrace)
-                          InkWell(
-                            onTap: () async {
-                              final traceData = await _firebaseService
-                                  .getEventTraceData(event.id ?? '');
-                              if (traceData != null && mounted) {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => TraceViewerDialog(
-                                    traceData: traceData,
-                                    showName: event.nom,
+                            return Wrap(
+                              spacing: 4,
+                              children: [
+                                if (hasTrace)
+                                  InkWell(
+                                    onTap: () async {
+                                      final traceData = await _firebaseService
+                                          .getEventTraceData(event.id ?? '');
+                                      if (traceData != null && mounted) {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => TraceViewerDialog(
+                                            traceData: traceData,
+                                            showName: event.nom,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[100],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue[300]!),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.visibility,
+                                              size: 12, color: Colors.blue[700]),
+                                          const SizedBox(width: 2),
+                                          Text('Tracé',
+                                              style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.blue[700],
+                                                  fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (hasEngages)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange[100],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.list_alt,
+                                            size: 10, color: Colors.orange[700]),
+                                        const SizedBox(width: 2),
+                                        Text('Engagés',
+                                            style: TextStyle(
+                                                fontSize: 9,
+                                                color: Colors.orange[700],
+                                                fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    // Bouton d'action principal
+                    StreamBuilder<List<Participation>>(
+                      stream: _firebaseService.getParticipationsByEventStream(event.id ?? ''),
+                      builder: (context, snapshot) {
+                        final participations = snapshot.data ?? [];
+                        final isFinished = participations.isNotEmpty &&
+                            participations.every((p) =>
+                                p.statut == 'passe' || p.statut == 'disqualifie');
+                        final hasStarted = participations.any(
+                            (p) => p.statut == 'passe' || p.statut == 'disqualifie');
+
+                        if (isFinished) {
+                          return SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        JudgeEventRunningScreen(event: event),
                                   ),
                                 );
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[100],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue[300]!),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.visibility,
-                                      size: 14, color: Colors.blue[700]),
-                                  const SizedBox(width: 4),
-                                  Text('Voir tracé',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.blue[700],
-                                          fontWeight: FontWeight.bold)),
-                                ],
+                              },
+                              icon: const Icon(Icons.emoji_events, size: 14),
+                              label: const Text('Terminée', style: TextStyle(fontSize: 11)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey[700],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
                               ),
                             ),
-                          ),
-                        if (hasTrace && hasEngages) const SizedBox(width: 6),
-                        if (hasEngages)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[100],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.list_alt,
-                                    size: 12, color: Colors.orange[700]),
-                                const SizedBox(width: 3),
-                                Text('Engagés',
-                                    style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.orange[700],
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<Participation>>(
-              future: _firebaseService.getParticipationsByEvent(event.id ?? ''),
-              builder: (context, snapshot) {
-                final participations = snapshot.data ?? [];
-                final isFinished = participations.isNotEmpty &&
-                    participations.every((p) =>
-                        p.statut == 'passe' || p.statut == 'disqualifie');
-                final hasStarted = participations.any(
-                    (p) => p.statut == 'passe' || p.statut == 'disqualifie');
+                          );
+                        }
 
-                if (isFinished) {
-                  return SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                JudgeEventRunningScreen(event: event),
+                        return SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      JudgeEventRunningScreen(event: event),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.play_arrow, size: 14),
+                            label: Text(hasStarted
+                                ? 'Continuer'
+                                : 'Lancer', style: const TextStyle(fontSize: 11)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  hasStarted ? Colors.orange[700] : Colors.green[700],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                            ),
                           ),
                         );
                       },
-                      icon: const Icon(Icons.emoji_events),
-                      label: const Text('Épreuve terminée - Résultats'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[700],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
                     ),
-                  );
-                }
-
-                return SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              JudgeEventRunningScreen(event: event),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(hasStarted
-                        ? 'Continuer l\'épreuve'
-                        : 'Lancer l\'épreuve'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          hasStarted ? Colors.orange[700] : Colors.green[700],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
           ],
         ),

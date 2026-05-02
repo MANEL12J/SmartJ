@@ -95,7 +95,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding user: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -158,7 +158,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding rider: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -181,7 +181,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding horse: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -204,7 +204,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding show: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -228,7 +228,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding competition: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -242,6 +242,15 @@ class FirebaseService {
       print('Error getting competitions: $e');
       return [];
     }
+  }
+
+  Stream<List<Competition>> getCompetitionsStream() {
+    return _firestore
+        .collection('competitions')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Competition.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
 
   Future<List<Competition>> getCompetitionsByShow(String showId) async {
@@ -266,7 +275,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding event: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -280,6 +289,15 @@ class FirebaseService {
       print('Error getting events: $e');
       return [];
     }
+  }
+
+  Stream<List<Event>> getEventsStream() {
+    return _firestore
+        .collection('events')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Event.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
 
   Future<List<Event>> getEventsByCompetition(String competitionId) async {
@@ -306,7 +324,7 @@ class FirebaseService {
       return docRef.id;
     } catch (e) {
       print('Error adding participation: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -340,6 +358,21 @@ class FirebaseService {
     }
   }
 
+  Stream<List<Participation>> getParticipationsByEventStream(String eventId) {
+    return _firestore
+        .collection('participations')
+        .where('eventId', isEqualTo: eventId)
+        .snapshots()
+        .map((snapshot) {
+          final participations = snapshot.docs
+              .map((doc) => Participation.fromFirestore(doc.data(), doc.id))
+              .toList();
+          // Sort by ordrePassage in Dart to avoid needing a Firestore composite index
+          participations.sort((a, b) => a.ordrePassage.compareTo(b.ordrePassage));
+          return participations;
+        });
+  }
+
   Future<void> updateParticipationStatus(
       String participationId, String status) async {
     try {
@@ -351,7 +384,7 @@ class FirebaseService {
       });
     } catch (e) {
       print('Error updating participation status: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -366,7 +399,7 @@ class FirebaseService {
       });
     } catch (e) {
       print('Error updating participation score: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -382,7 +415,7 @@ class FirebaseService {
       });
     } catch (e) {
       print('Error updating participation score and status: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -903,10 +936,14 @@ class FirebaseService {
           if (col.contains('ordre') ||
               col.contains('num') ||
               col.contains('n°') ||
-              col.contains('#')) ordreIdx = i;
+              col.contains('#')) {
+            ordreIdx = i;
+          }
           if (col.contains('nom') &&
               !col.contains('cheval') &&
-              !col.contains('prenom')) nomIdx = i;
+              !col.contains('prenom')) {
+            nomIdx = i;
+          }
           if (col.contains('prenom') || col.contains('prénom')) prenomIdx = i;
           if (col.contains('cheval') || col.contains('horse')) chevalIdx = i;
           if (col.contains('club')) clubIdx = i;
@@ -1051,7 +1088,15 @@ class FirebaseService {
     final sheetDoc = XmlDocument.parse(sheetContent);
 
     final rowElements = sheetDoc.findAllElements('row');
-    for (var rowElem in rowElements) {
+    // Trier les lignes par leur attribut 'r' pour préserver l'ordre du fichier Excel
+    final sortedRows = rowElements.toList()
+      ..sort((a, b) {
+        final rowA = int.tryParse(a.getAttribute('r') ?? '0') ?? 0;
+        final rowB = int.tryParse(b.getAttribute('r') ?? '0') ?? 0;
+        return rowA.compareTo(rowB);
+      });
+    
+    for (var rowElem in sortedRows) {
       final rowData = <String>[];
       final cellElements = rowElem.findAllElements('c');
 

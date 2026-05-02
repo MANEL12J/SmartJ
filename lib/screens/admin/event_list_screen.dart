@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/event.dart';
 import '../../services/firebase_service.dart';
-import 'add_event_screen.dart';
+import 'add_event_screen.dart'; 
 import '../designer/event_trace_viewer_dialog.dart';
 import 'engages_list_viewer_dialog.dart';
 
@@ -15,28 +16,14 @@ class EventListScreen extends StatefulWidget {
 
 class _EventListScreenState extends State<EventListScreen> {
   final FirebaseService _firebaseService = FirebaseService();
-  List<Event> _events = [];
-  bool _isLoading = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadEvents();
-  }
-
-  Future<void> _loadEvents() async {
-    try {
-      final events = await _firebaseService.getEvents();
-      setState(() {
-        _events = events;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showError('Erreur lors du chargement des épreuves: $e');
-    }
+  Stream<List<Event>> _getEventsStream() {
+    return FirebaseFirestore.instance
+        .collection('events')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Event.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
 
   void _showSuccess(String message) {
@@ -65,57 +52,266 @@ class _EventListScreenState extends State<EventListScreen> {
         title: const Text('Liste des Épreuves'),
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadEvents,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(
+      body: StreamBuilder<List<Event>>(
+        stream: _getEventsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
               child: CircularProgressIndicator(),
-            )
-          : _events.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.sports_gymnastics_outlined,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Aucune épreuve trouvée',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Ajoutez votre première épreuve pour commencer',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Erreur de chargement',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.red[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    snapshot.error.toString(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.red[500],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final events = snapshot.data ?? [];
+
+          if (events.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.sports_gymnastics_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Aucune épreuve trouvée',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ajoutez votre première épreuve pour commencer',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              // Le StreamBuilder se mettra à jour automatiquement
+            },
+            child: Column(
+              children: [
+                // En-tête du tableau
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red[700],
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadEvents,
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        // Colonne Nom
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Nom',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Date
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Date',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Heure
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Heure',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Hauteur
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Hauteur',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Carrière
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Carrière',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Barème
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Barème',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Compétition
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Compétition',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Actions
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: const Text(
+                              'Actions',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Liste des épreuves
+                Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _events.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: events.length,
                     itemBuilder: (context, index) {
-                      final event = _events[index];
-                      return _buildEventCard(event);
+                      final event = events[index];
+                      return _buildEventListCard(event);
                     },
                   ),
                 ),
+              ],
+            ),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await Navigator.of(context).push(
@@ -123,7 +319,7 @@ class _EventListScreenState extends State<EventListScreen> {
               builder: (context) => const AddEventScreen(),
             ),
           );
-          _loadEvents();
+          // Pas besoin de recharger manuellement, le StreamBuilder le fera automatiquement
         },
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
@@ -132,189 +328,220 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildEventCard(Event event) {
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: () {
-          _showEventDetails(event);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
+  Widget _buildEventListCard(Event event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Colonne Nom
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
                       event.nom,
                       style: const TextStyle(
-                        fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Date
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${event.date.day}/${event.date.month}/${event.date.year}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Heure
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.heure,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Hauteur
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${event.hauteur}m',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Carrière
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      event.carriere,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Barème
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        event.bareme,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.red[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      event.bareme,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.red[700],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${event.date.day}/${event.date.month}/${event.date.year}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    event.heure,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.height,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${event.hauteur}m',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(
-                    Icons.stadium,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    event.carriere,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FutureBuilder<bool>(
-                future: _firebaseService.hasEventTrace(event.id ?? ''),
-                builder: (context, snapshot) {
-                  if (snapshot.data == true) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final traceData = await _firebaseService
-                              .getEventTraceData(event.id ?? '');
-                          if (traceData != null && mounted) {
-                            showDialog(
-                              context: context,
-                              builder: (context) => EventTraceViewerDialog(
-                                traceData: traceData,
-                                eventName: event.nom,
+            ),
+            
+            // Colonne Compétition
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FutureBuilder<String>(
+                      future: _firebaseService.getCompetitionNameById(event.competitionId),
+                      builder: (context, snapshot) {
+                        return Row(
+                          children: [
+                            Icon(Icons.emoji_events, size: 14, color: Colors.purple[600]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                snapshot.data ?? 'Chargement...',
+                                style: TextStyle(fontSize: 12, color: Colors.purple[600]),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.map, size: 16),
-                        label: const Text('Voir le tracé'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orange[700],
-                          side: BorderSide(color: Colors.orange[700]!),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          textStyle: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              FutureBuilder<String>(
-                future: _firebaseService
-                    .getCompetitionNameById(event.competitionId),
-                builder: (context, snapshot) {
-                  return Row(
-                    children: [
-                      Icon(
-                        Icons.emoji_events,
-                        size: 16,
-                        color: Colors.purple[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Compétition: ${snapshot.data ?? 'Chargement...'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.purple[600],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              // Boutons Upload et Voir liste des engagés (alignés à droite)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // Bouton Voir liste des engagés
-                  FutureBuilder<bool>(
-                    future: _firebaseService.hasEngagesList(event.id ?? ''),
-                    builder: (context, snapshot) {
-                      if (snapshot.data == true) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: OutlinedButton.icon(
+            ),
+            
+            // Colonne Actions
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 2,
+                  alignment: WrapAlignment.start,
+                  children: [
+                    // Bouton Voir liste des engagés
+                    FutureBuilder<bool>(
+                      future: _firebaseService.hasEngagesList(event.id ?? ''),
+                      builder: (context, snapshot) {
+                        if (snapshot.data == true) {
+                          return ElevatedButton.icon(
                             onPressed: () async {
                               final engagesData = await _firebaseService
                                   .getEngagesListData(event.id ?? '');
@@ -328,40 +555,265 @@ class _EventListScreenState extends State<EventListScreen> {
                                 );
                               }
                             },
-                            icon: const Icon(Icons.table_chart, size: 16),
-                            label: const Text('Voir'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.blue[700],
-                              side: BorderSide(color: Colors.blue[700]!),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              textStyle: const TextStyle(fontSize: 12),
+                            icon: const Icon(Icons.table_chart, size: 12),
+                            label: const Text('Voir', style: TextStyle(fontSize: 10)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              minimumSize: const Size(40, 24),
                             ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                    // Bouton Upload liste des engagés
+                    FutureBuilder<bool>(
+                      future: _firebaseService.hasEngagesList(event.id ?? ''),
+                      builder: (context, snapshot) {
+                        final hasEngages = snapshot.data ?? false;
+                        return ElevatedButton.icon(
+                          onPressed: () => _uploadEngagesList(event),
+                          icon: const Icon(Icons.upload_file, size: 12),
+                          label: Text(
+                            hasEngages ? 'Modifier Engager' : 'Importer Engager',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: hasEngages ? Colors.orange[700] : Colors.green[700],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            minimumSize: const Size(80, 24),
                           ),
                         );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                  // Bouton Upload liste des engagés
-                  OutlinedButton.icon(
-                    onPressed: () => _uploadEngagesList(event),
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('Engagés'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green[700],
-                      side: BorderSide(color: Colors.green[700]!),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      textStyle: const TextStyle(fontSize: 12),
+                      },
                     ),
-                  ),
-                ],
+                    // Bouton Voir tracé
+                    FutureBuilder<bool>(
+                      future: _firebaseService.hasEventTrace(event.id ?? ''),
+                      builder: (context, snapshot) {
+                        if (snapshot.data == true) {
+                          return ElevatedButton.icon(
+                            onPressed: () async {
+                              final traceData = await _firebaseService
+                                  .getEventTraceData(event.id ?? '');
+                              if (traceData != null && mounted) {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => EventTraceViewerDialog(
+                                    traceData: traceData,
+                                    eventName: event.nom,
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.map, size: 12),
+                            label: const Text('Tracé', style: TextStyle(fontSize: 10)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color.fromARGB(255, 75, 73, 122),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              minimumSize: const Size(45, 24),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  DataRow _buildEventDataRow(Event event) {
+    return DataRow(
+      color: WidgetStateProperty.all(Colors.white),
+      cells: [
+        DataCell(
+          SizedBox(
+            width: 150,
+            child: Text(
+              event.nom,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 120,
+            child: Text(
+              '${event.date.day}/${event.date.month}/${event.date.year}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 80,
+            child: Text(
+              event.heure,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 80,
+            child: Text(
+              '${event.hauteur}m',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 100,
+            child: Text(
+              event.carriere,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 80,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                event.bareme,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.red[700],
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 120,
+            child: FutureBuilder<String>(
+              future: _firebaseService.getCompetitionNameById(event.competitionId),
+              builder: (context, snapshot) {
+                return Row(
+                  children: [
+                    Icon(Icons.emoji_events, size: 14, color: Colors.purple[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        snapshot.data ?? 'Chargement...',
+                        style: TextStyle(fontSize: 12, color: Colors.purple[600]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 280,
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: [
+                // Bouton Voir liste des engagés
+                FutureBuilder<bool>(
+                  future: _firebaseService.hasEngagesList(event.id ?? ''),
+                  builder: (context, snapshot) {
+                    if (snapshot.data == true) {
+                      return ElevatedButton.icon(
+                        onPressed: () async {
+                          final engagesData = await _firebaseService
+                              .getEngagesListData(event.id ?? '');
+                          if (engagesData != null && mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (context) => EngagesListViewerDialog(
+                                engagesData: engagesData,
+                                eventName: event.nom,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.table_chart, size: 12),
+                        label: const Text('Voir', style: TextStyle(fontSize: 10)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: const Size(40, 24),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+                // Bouton Upload liste des engagés
+                ElevatedButton.icon(
+                  onPressed: () => _uploadEngagesList(event),
+                  icon: const Icon(Icons.upload_file, size: 12),
+                  label: const Text('Importer Engager', style: TextStyle(fontSize: 10)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    minimumSize: const Size(80, 24),
+                  ),
+                ),
+                // Bouton Voir tracé
+                FutureBuilder<bool>(
+                  future: _firebaseService.hasEventTrace(event.id ?? ''),
+                  builder: (context, snapshot) {
+                    if (snapshot.data == true) {
+                      return ElevatedButton.icon(
+                        onPressed: () async {
+                          final traceData = await _firebaseService
+                              .getEventTraceData(event.id ?? '');
+                          if (traceData != null && mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (context) => EventTraceViewerDialog(
+                                traceData: traceData,
+                                eventName: event.nom,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.map, size: 12),
+                        label: const Text('Tracé', style: TextStyle(fontSize: 10)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          minimumSize: const Size(45, 24),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -385,10 +837,10 @@ class _EventListScreenState extends State<EventListScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          setState(() {});
+          // Le StreamBuilder détectera automatiquement les changements
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('Erreur lors de l\'upload de la liste des engagés'),
               backgroundColor: Colors.red,
             ),

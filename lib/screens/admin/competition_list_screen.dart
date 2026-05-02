@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/competition.dart';
 import '../../services/firebase_service.dart';
 import 'add_competition_screen.dart';
@@ -12,28 +13,14 @@ class CompetitionListScreen extends StatefulWidget {
 
 class _CompetitionListScreenState extends State<CompetitionListScreen> {
   final FirebaseService _firebaseService = FirebaseService();
-  List<Competition> _competitions = [];
-  bool _isLoading = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCompetitions();
-  }
-
-  Future<void> _loadCompetitions() async {
-    try {
-      final competitions = await _firebaseService.getCompetitions();
-      setState(() {
-        _competitions = competitions;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showError('Erreur lors du chargement des compétitions: $e');
-    }
+  Stream<List<Competition>> _getCompetitionsStream() {
+    return FirebaseFirestore.instance
+        .collection('competitions')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Competition.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
 
   void _showSuccess(String message) {
@@ -62,57 +49,225 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
         title: const Text('Liste des Compétitions'),
         backgroundColor: Colors.purple[700],
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadCompetitions,
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(
+      body: StreamBuilder<List<Competition>>(
+        stream: _getCompetitionsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
               child: CircularProgressIndicator(),
-            )
-          : _competitions.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.emoji_events_outlined,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Aucune compétition trouvée',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Ajoutez votre première compétition pour commencer',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Erreur de chargement',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.red[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    snapshot.error.toString(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.red[500],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final competitions = snapshot.data ?? [];
+
+          if (competitions.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.emoji_events_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Aucune compétition trouvée',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ajoutez votre première compétition pour commencer',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Column(
+              children: [
+                // En-tête du tableau
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.purple[700],
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadCompetitions,
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        // Colonne Nom
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Nom',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Date
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Date',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Club
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Club',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Région
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Région',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Règlement
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border(right: BorderSide(color: Colors.white.withOpacity(0.3))),
+                            ),
+                            child: const Text(
+                              'Règlement',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Colonne Show
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: const Text(
+                              'Show',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Liste des compétitions
+                Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _competitions.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: competitions.length,
                     itemBuilder: (context, index) {
-                      final competition = _competitions[index];
-                      return _buildCompetitionCard(competition);
+                      final competition = competitions[index];
+                      return _buildCompetitionListCard(competition);
                     },
                   ),
                 ),
+              ],
+            );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await Navigator.of(context).push(
@@ -120,7 +275,7 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
               builder: (context) => const AddCompetitionScreen(),
             ),
           );
-          _loadCompetitions();
+          // Pas besoin de recharger manuellement, le StreamBuilder le fera automatiquement
         },
         backgroundColor: Colors.purple[700],
         foregroundColor: Colors.white,
@@ -129,134 +284,273 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
     );
   }
 
-  Widget _buildCompetitionCard(Competition competition) {
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: () {
-          _showCompetitionDetails(competition);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
+  Widget _buildCompetitionListCard(Competition competition) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Colonne Nom
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
                       competition.nom,
                       style: const TextStyle(
-                        fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Date
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${competition.date.day}/${competition.date.month}/${competition.date.year}',
+                      style: const TextStyle(fontSize: 12),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.purple[100],
-                      borderRadius: BorderRadius.circular(12),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Club
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      competition.club,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Text(
-                      competition.reglement,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.purple[700],
-                        fontWeight: FontWeight.bold,
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Région
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      competition.region,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Colonne Règlement
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.purple[100],
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.home,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    competition.club,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    competition.region,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${competition.date.day}/${competition.date.month}/${competition.date.year}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FutureBuilder<String?>(
-                future: _firebaseService.getShowNameById(competition.showId),
-                builder: (context, snapshot) {
-                  return Row(
-                    children: [
-                      Icon(
-                        Icons.event,
-                        size: 16,
-                        color: Colors.orange[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Show: ${snapshot.data ?? 'Chargement...'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange[600],
-                          ),
+                      child: Text(
+                        competition.reglement,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.purple[700],
+                          fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+            
+            // Colonne Show
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FutureBuilder<String?>(
+                      future: _firebaseService.getShowNameById(competition.showId),
+                      builder: (context, snapshot) {
+                        return Row(
+                          children: [
+                            Icon(Icons.event, size: 14, color: Colors.orange[600]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                snapshot.data ?? 'Chargement...',
+                                style: TextStyle(fontSize: 12, color: Colors.orange[600]),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  DataRow _buildCompetitionDataRow(Competition competition) {
+    return DataRow(
+      color: WidgetStateProperty.all(Colors.white),
+      cells: [
+        DataCell(
+          SizedBox(
+            width: 150,
+            child: Text(
+              competition.nom,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 120,
+            child: Text(
+              '${competition.date.day}/${competition.date.month}/${competition.date.year}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 100,
+            child: Text(
+              competition.club,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 100,
+            child: Text(
+              competition.region,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 100,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.purple[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                competition.reglement,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.purple[700],
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 120,
+            child: FutureBuilder<String?>(
+              future: _firebaseService.getShowNameById(competition.showId),
+              builder: (context, snapshot) {
+                return Row(
+                  children: [
+                    Icon(Icons.event, size: 14, color: Colors.orange[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        snapshot.data ?? 'Chargement...',
+                        style: TextStyle(fontSize: 12, color: Colors.orange[600]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+              ],
     );
   }
 
@@ -273,8 +567,7 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
               children: [
                 Text('Club: ${competition.club}'),
                 Text('Région: ${competition.region}'),
-                Text(
-                    'Date: ${competition.date.day}/${competition.date.month}/${competition.date.year}'),
+                Text('Date: ${competition.date.day}/${competition.date.month}/${competition.date.year}'),
                 Text('Règlement: ${competition.reglement}'),
                 FutureBuilder<String?>(
                   future: _firebaseService.getShowNameById(competition.showId),
