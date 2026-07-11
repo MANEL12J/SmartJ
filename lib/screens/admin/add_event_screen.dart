@@ -4,7 +4,9 @@ import '../../models/competition.dart';
 import '../../services/firebase_service.dart';
 
 class AddEventScreen extends StatefulWidget {
-  const AddEventScreen({super.key});
+  final VoidCallback? onBack;
+
+  const AddEventScreen({super.key, this.onBack});
 
   @override
   State<AddEventScreen> createState() => _AddEventScreenState();
@@ -171,6 +173,12 @@ class _AddEventScreenState extends State<AddEventScreen> {
         title: const Text('Ajouter une Épreuve'),
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

@@ -4,7 +4,9 @@ import '../../models/show.dart';
 import '../../services/firebase_service.dart';
 
 class AddCompetitionScreen extends StatefulWidget {
-  const AddCompetitionScreen({super.key});
+  final VoidCallback? onBack;
+
+  const AddCompetitionScreen({super.key, this.onBack});
 
   @override
   State<AddCompetitionScreen> createState() => _AddCompetitionScreenState();
@@ -144,6 +146,12 @@ class _AddCompetitionScreenState extends State<AddCompetitionScreen> {
         title: const Text('Ajouter une Compétition'),
         backgroundColor: Colors.purple[700],
         foregroundColor: Colors.white,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

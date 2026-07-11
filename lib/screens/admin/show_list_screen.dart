@@ -13,6 +13,7 @@ class ShowListScreen extends StatefulWidget {
 
 class _ShowListScreenState extends State<ShowListScreen> {
   final FirebaseService _firebaseService = FirebaseService();
+  bool _showAddScreen = false;
 
   Stream<List<Show>> _getShowsStream() {
     return FirebaseFirestore.instance
@@ -44,6 +45,14 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showAddScreen) {
+      return AddShowScreen(onBack: () {
+        setState(() {
+          _showAddScreen = false;
+        });
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Liste des Shows'),
@@ -269,13 +278,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddShowScreen(),
-            ),
-          );
-          // Pas besoin de recharger manuellement, le StreamBuilder le fera automatiquement
+        onPressed: () {
+          setState(() {
+            _showAddScreen = true;
+          });
         },
         backgroundColor: Colors.orange[700],
         foregroundColor: Colors.white,
@@ -479,7 +485,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   DataRow _buildShowDataRow(Show show) {
     return DataRow(
-      color: WidgetStateProperty.all(Colors.white),
+      color: MaterialStateProperty.all(Colors.white),
       cells: [
         DataCell(
           SizedBox(

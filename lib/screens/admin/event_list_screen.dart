@@ -16,6 +16,7 @@ class EventListScreen extends StatefulWidget {
 
 class _EventListScreenState extends State<EventListScreen> {
   final FirebaseService _firebaseService = FirebaseService();
+  bool _showAddScreen = false;
 
   Stream<List<Event>> _getEventsStream() {
     return FirebaseFirestore.instance
@@ -47,6 +48,14 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showAddScreen) {
+      return AddEventScreen(onBack: () {
+        setState(() {
+          _showAddScreen = false;
+        });
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Liste des Épreuves'),
@@ -313,13 +322,10 @@ class _EventListScreenState extends State<EventListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddEventScreen(),
-            ),
-          );
-          // Pas besoin de recharger manuellement, le StreamBuilder le fera automatiquement
+        onPressed: () {
+          setState(() {
+            _showAddScreen = true;
+          });
         },
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
@@ -633,7 +639,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
   DataRow _buildEventDataRow(Event event) {
     return DataRow(
-      color: WidgetStateProperty.all(Colors.white),
+      color: MaterialStateProperty.all(Colors.white),
       cells: [
         DataCell(
           SizedBox(

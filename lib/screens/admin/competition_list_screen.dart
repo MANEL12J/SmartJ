@@ -13,6 +13,7 @@ class CompetitionListScreen extends StatefulWidget {
 
 class _CompetitionListScreenState extends State<CompetitionListScreen> {
   final FirebaseService _firebaseService = FirebaseService();
+  bool _showAddScreen = false;
 
   Stream<List<Competition>> _getCompetitionsStream() {
     return FirebaseFirestore.instance
@@ -44,6 +45,14 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showAddScreen) {
+      return AddCompetitionScreen(onBack: () {
+        setState(() {
+          _showAddScreen = false;
+        });
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Liste des Compétitions'),
@@ -269,13 +278,10 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddCompetitionScreen(),
-            ),
-          );
-          // Pas besoin de recharger manuellement, le StreamBuilder le fera automatiquement
+        onPressed: () {
+          setState(() {
+            _showAddScreen = true;
+          });
         },
         backgroundColor: Colors.purple[700],
         foregroundColor: Colors.white,
@@ -466,7 +472,7 @@ class _CompetitionListScreenState extends State<CompetitionListScreen> {
 
   DataRow _buildCompetitionDataRow(Competition competition) {
     return DataRow(
-      color: WidgetStateProperty.all(Colors.white),
+      color: MaterialStateProperty.all(Colors.white),
       cells: [
         DataCell(
           SizedBox(

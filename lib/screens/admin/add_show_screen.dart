@@ -4,7 +4,9 @@ import '../../models/user.dart';
 import '../../services/firebase_service.dart';
 
 class AddShowScreen extends StatefulWidget {
-  const AddShowScreen({super.key});
+  final VoidCallback? onBack;
+
+  const AddShowScreen({super.key, this.onBack});
 
   @override
   State<AddShowScreen> createState() => _AddShowScreenState();
@@ -157,6 +159,12 @@ class _AddShowScreenState extends State<AddShowScreen> {
         title: const Text('Ajouter un Show'),
         backgroundColor: Colors.orange[700],
         foregroundColor: Colors.white,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

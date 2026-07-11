@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:excel/excel.dart';
 
 class EngagesListViewerDialog extends StatefulWidget {
   final Map<String, dynamic> engagesData;
@@ -25,6 +26,7 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
   String? _error;
   String _extension = 'xlsx';
   String _fileName = '';
+  List<List<String>> _excelData = [];
 
   @override
   void initState() {
@@ -39,8 +41,16 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
       _fileName = widget.engagesData['fileName'] ?? 'liste_engages.$_extension';
 
       final bytes = base64Decode(base64String);
+      _fileBytes = bytes;
+
+      // Parse Excel file
+      if (_extension == 'xlsx' || _extension == 'xls') {
+        _excelData = await _parseExcelFile(bytes);
+      } else if (_extension == 'csv') {
+        _excelData = _parseCSVFile(bytes);
+      }
+
       setState(() {
-        _fileBytes = bytes;
         _isLoading = false;
       });
     } catch (e) {
@@ -48,6 +58,52 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
         _error = 'Erreur lors du chargement du fichier: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<List<List<String>>> _parseExcelFile(Uint8List bytes) async {
+    try {
+      final excel = Excel.decodeBytes(bytes);
+      final List<List<String>> data = [];
+
+      for (final table in excel.tables.keys) {
+        final sheet = excel.tables[table];
+        if (sheet != null) {
+          for (final row in sheet.rows) {
+            final List<String> rowData = [];
+            for (final cell in row) {
+              rowData.add(cell?.value?.toString() ?? '');
+            }
+            if (rowData.any((cell) => cell.isNotEmpty)) {
+              data.add(rowData);
+            }
+          }
+          break; // Only read first sheet
+        }
+      }
+      return data;
+    } catch (e) {
+      print('Error parsing Excel: $e');
+      return [['Erreur lors du parsing du fichier Excel']];
+    }
+  }
+
+  List<List<String>> _parseCSVFile(Uint8List bytes) {
+    try {
+      final String content = utf8.decode(bytes);
+      final List<List<String>> data = [];
+      final lines = content.split('\n');
+
+      for (final line in lines) {
+        if (line.trim().isNotEmpty) {
+          final cells = line.split(',');
+          data.add(cells);
+        }
+      }
+      return data;
+    } catch (e) {
+      print('Error parsing CSV: $e');
+      return [['Erreur lors du parsing du fichier CSV']];
     }
   }
 
@@ -164,7 +220,7 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
 
               // Content
               Expanded(
-                child: SingleChildScrollView(
+                child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator())
@@ -197,45 +253,54 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          _getFileIcon(),
-          size: 80,
-          color: _getFileColor(),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          _fileName,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 8),
-              Text(
-                'Taille: ${_getFileSize()} | Format: ${_extension.toUpperCase()}',
-                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+        // File info header
+        Row(
+          children: [
+            Icon(
+              _getFileIcon(),
+              size: 24,
+              color: _getFileColor(),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _fileName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+            Text(
+              'Uploadé le ${_getUploadDate()}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Uploadé le ${_getUploadDate()}',
-          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+        const SizedBox(height: 16),
+        // Excel data table
+        Expanded(
+          child: _excelData.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: Colors.orange[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Aucune donnée trouvée dans le fichier',
+                        style: TextStyle(fontSize: 16, color: Colors.orange[600]),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  child: _buildDataTable(),
+                ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        // Action buttons
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -251,6 +316,39 @@ class _EngagesListViewerDialogState extends State<EngagesListViewerDialog> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildDataTable() {
+    if (_excelData.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 2,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: DataTable(
+            columns: _excelData[0].map((header) {
+              return DataColumn(
+                label: Text(
+                  header,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              );
+            }).toList(),
+            rows: _excelData.skip(1).map((row) {
+              return DataRow(
+                cells: row.map((cell) {
+                  return DataCell(
+                    Text(cell),
+                  );
+                }).toList(),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
     );
   }
 
